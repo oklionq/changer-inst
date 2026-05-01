@@ -1,11 +1,16 @@
 """
 Calls OpenAI API with photos + topic + knowledge base context.
 Uses gpt-4o (vision) to analyze photos and generate slide texts.
+
+Text limits are enforced twice:
+  1. In the prompt (soft — tells GPT the limits)
+  2. In _enforce_text_limits (hard — truncates if GPT exceeds)
 """
 
 import asyncio
 import base64
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -14,8 +19,13 @@ from prompts import SYSTEM_PROMPT, SLIDE_GENERATION_TEMPLATE
 from knowledge_base import KnowledgeBase
 from config import OPENAI_API_KEY, OPENAI_MODEL, TRANSCRIPTIONS_DIR
 
+logger = logging.getLogger(__name__)
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 kb = KnowledgeBase(TRANSCRIPTIONS_DIR)
+
+MAX_HEADLINE_WORDS = 7
+MAX_SUBTITLE_WORDS = 15
 
 
 def _image_to_base64(path: str) -> tuple[str, str]:
@@ -40,6 +50,27 @@ def _describe_slide_positions(n: int) -> str:
         parts.append(f"{i} (insight/proof)")
     parts.append(f"{n} (consequence/action)")
     return ", ".join(parts)
+
+
+def _enforce_text_limits(slides: list[dict]) -> list[dict]:
+    """Hard truncation — guarantees headline <= 7 words, subtitle <= 15 words."""
+    for slide in slides:
+        headline = slide.get("headline", "")
+        words = headline.split()
+        if len(words) > MAX_HEADLINE_WORDS:
+            slide["headline"] = " ".join(words[:MAX_HEADLINE_WORDS])
+            logger.info("Truncated headline from %d to %d words", len(words), MAX_HEADLINE_WORDS)
+
+        subtitle = slide.get("subtitle", "")
+        words = subtitle.split()
+        if len(words) > MAX_SUBTITLE_WORDS:
+            slide["subtitle"] = " ".join(words[:MAX_SUBTITLE_WORDS]) + "."
+            logger.info("Truncated subtitle from %d to %d words", len(words), MAX_SUBTITLE_WORDS)
+
+        # Force uppercase headline
+        slide["headline"] = slide.get("headline", "").upper()
+
+    return slides
 
 
 def _sync_generate(photo_paths: list, topic: str) -> list:
@@ -82,7 +113,9 @@ def _sync_generate(photo_paths: list, topic: str) -> list:
 
     raw = response.choices[0].message.content.strip()
     raw = raw.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw)
+    slides = json.loads(raw)
+
+    return _enforce_text_limits(slides)
 
 
 async def generate_slide_texts(photo_paths: list, topic: str) -> list:
