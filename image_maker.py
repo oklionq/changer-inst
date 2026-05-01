@@ -5,14 +5,15 @@ MZ Property Portfolio standard. Instagram carousel 1080 x 1350 (4:5).
 
 Design grid:
   ┌──────────────────────────────┐
-  │        ·              ·      │  8 % top
-  │        · C H A N G E R ·    │  logo zone (clean photo)
-  │        ·              ·      │
+  │            ·    ·            │  8 % top
+  │       · C H A N G E R ·     │  logo — centred
+  │            ·    ·            │
   │                              │  transparent — photo breathes
   │       ░░░░░░░░░░░░░░░░░     │  gradient starts (33 %)
   │                              │
-  │  ▓▓  HEADLINE CAPS  ▓▓      │  safe zone: 70 % W × 60 % H
-  │  ▓▓  body sentence   ▓▓     │
+  │      HEADLINE  CAPS          │  centred, safe zone 70 % W
+  │         ───────              │  70 px gap + divider
+  │       body sentence          │  centred, Montserrat Light
   │  ████████████████████████    │  gradient max (bottom 33 %)
   └──────────────────────────────┘
 
@@ -43,15 +44,17 @@ logger = logging.getLogger(__name__)
 TARGET: tuple[int, int] = (SLIDE_WIDTH, SLIDE_HEIGHT)  # 1080 × 1350
 
 # ── Layout ratios ───────────────────────────────────────────
-PAD_X = 0.15          # 15 % side padding
+PAD_X = 0.15          # 15 % side padding (min 150 px enforced in code)
+PAD_X_MIN = 150       # absolute minimum side padding in pixels
 LOGO_TOP = 0.08       # 8 % from top
 LOGO_W = 0.18         # logo image width = 18 % of slide
-TEXT_BOTTOM = 0.80     # text block bottom edge (safe zone end)
+TEXT_BOTTOM = 0.82     # text block bottom edge (safe zone end)
 TITLE_RATIO = 0.060   # title font ≈ 6 % of width → ~65 px
 BODY_DIV = 2.5        # body = title / 2.5
-SPACING_K = 0.10      # letter-spacing = 10 % of title font size
+SPACING_K = 0.12      # letter-spacing = 12 % of title font size
 LINE_H = 1.45         # line-height multiplier
-GAP_K = 0.025         # gap between title & body = 2.5 % of height
+GAP_PX = 70           # fixed gap between title & body (60-80 px range)
+DIVIDER_W = 50        # decorative divider line width
 
 # ── Gradient ────────────────────────────────────────────────
 GRAD_ALPHA = 180       # max opacity (lower third)
@@ -272,21 +275,22 @@ def _place_logo(img: Image.Image, logo_override: str | None = None) -> Image.Ima
 
 def _draw_text_block(img: Image.Image, headline: str, subtitle: str) -> Image.Image:
     """
-    Draw headline + subtitle inside the safe zone.
+    Draw headline + subtitle, both **centred horizontally** in the safe zone.
 
     Title:  Cinzel Bold 700, UPPERCASE, letter-spaced, white + shadow.
     Body:   Montserrat Light 300, natural spacing, light grey.
+    Gap:    70 px + thin decorative divider line.
     """
     draw = ImageDraw.Draw(img)
     w, h = img.size
 
-    pad_x = int(w * PAD_X)
-    max_w = w - 2 * pad_x                           # 70 % of width
+    pad_x = max(int(w * PAD_X), PAD_X_MIN)          # ≥ 150 px
+    max_w = w - 2 * pad_x                            # ~70 % of width
 
     # ── Title setup ──
     title_size = int(w * TITLE_RATIO)                # ~65 px
     title_font = _load_font("cinzel", title_size, weight=700)
-    title_spacing = title_size * SPACING_K           # ~6.5 px
+    title_spacing = title_size * SPACING_K           # ~7.8 px
     title_line_h = int(title_size * LINE_H)
 
     title_lines = _wrap_lines(draw, headline.upper(), title_font,
@@ -301,9 +305,8 @@ def _draw_text_block(img: Image.Image, headline: str, subtitle: str) -> Image.Im
     body_lines = _wrap_lines(draw, subtitle, body_font, body_spacing, max_w)
 
     # ── Compute total block height, bottom-align in safe zone ──
-    gap = int(h * GAP_K)
     block_h = (len(title_lines) * title_line_h
-               + gap
+               + GAP_PX
                + len(body_lines) * body_line_h)
 
     bottom = int(h * TEXT_BOTTOM)
@@ -314,21 +317,28 @@ def _draw_text_block(img: Image.Image, headline: str, subtitle: str) -> Image.Im
     y = top_y
     shadow = (2, 2, (0, 0, 0))
 
-    # ── Draw title lines ──
+    # ── Draw title lines (centred) ──
     for line in title_lines:
         lw = _measure_spaced(draw, line, title_font, title_spacing)
-        x = pad_x                                    # left-aligned in safe zone
+        x = (w - lw) / 2                             # centred horizontally
         _draw_spaced(draw, (x, y), line, title_font,
                      (255, 255, 255), title_spacing, shadow)
         y += title_line_h
 
-    y += gap
+    # ── Decorative divider ──
+    div_y = int(y + GAP_PX * 0.45)
+    div_x = (w - DIVIDER_W) // 2
+    draw.line([(div_x, div_y), (div_x + DIVIDER_W, div_y)],
+              fill=(255, 255, 255), width=1)
 
-    # ── Draw body lines ──
+    y += GAP_PX
+
+    # ── Draw body lines (centred) ──
     for line in body_lines:
-        # Body has no extra letter-spacing — draw normally
-        draw.text((pad_x + 2, y + 1), line, font=body_font, fill=(0, 0, 0))
-        draw.text((pad_x, y), line, font=body_font, fill=(200, 200, 200))
+        lw = draw.textlength(line, font=body_font)
+        x = (w - lw) / 2                             # centred horizontally
+        draw.text((x + 2, y + 1), line, font=body_font, fill=(0, 0, 0))
+        draw.text((x, y), line, font=body_font, fill=(200, 200, 200))
         y += body_line_h
 
     return img
