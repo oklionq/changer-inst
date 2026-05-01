@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 client = OpenAI(api_key=OPENAI_API_KEY)
 kb = KnowledgeBase(TRANSCRIPTIONS_DIR)
 
-MAX_HEADLINE_WORDS = 7
-MAX_SUBTITLE_WORDS = 15
+MAX_HEADLINE_WORDS = 5
+MAX_SUBTITLE_WORDS = 10
 
 
 def _image_to_base64(path: str) -> tuple[str, str]:
@@ -53,7 +53,7 @@ def _describe_slide_positions(n: int) -> str:
 
 
 def _enforce_text_limits(slides: list[dict]) -> list[dict]:
-    """Hard truncation — guarantees headline <= 7 words, subtitle <= 15 words."""
+    """Hard truncation — guarantees headline <= 5 words, subtitle <= 10 words."""
     for slide in slides:
         headline = slide.get("headline", "")
         words = headline.split()

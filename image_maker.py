@@ -5,9 +5,8 @@ MZ Property Portfolio standard. Instagram carousel 1080 x 1350 (4:5).
 
 Design grid:
   ┌──────────────────────────────┐
-  │            ·    ·            │  8 % top
-  │       · C H A N G E R ·     │  logo — centred
-  │            ·    ·            │
+  │                    [LOGO]    │  8 % top / 8 % right
+  │                              │  logo — top-right corner
   │                              │  transparent — photo breathes
   │       ░░░░░░░░░░░░░░░░░     │  gradient starts (33 %)
   │                              │
@@ -47,7 +46,8 @@ TARGET: tuple[int, int] = (SLIDE_WIDTH, SLIDE_HEIGHT)  # 1080 × 1350
 PAD_X = 0.15          # 15 % side padding (min 150 px enforced in code)
 PAD_X_MIN = 150       # absolute minimum side padding in pixels
 LOGO_TOP = 0.08       # 8 % from top
-LOGO_W = 0.18         # logo image width = 18 % of slide
+LOGO_RIGHT = 0.08     # 8 % from right edge
+LOGO_W = 0.15         # logo image width = 15 % of slide (compact for corner)
 TEXT_BOTTOM = 0.82     # text block bottom edge (safe zone end)
 TITLE_RATIO = 0.060   # title font ≈ 6 % of width → ~65 px
 BODY_DIV = 2.5        # body = title / 2.5
@@ -238,9 +238,10 @@ def _draw_gradient_overlay(img: Image.Image) -> Image.Image:
 # ── Logo ────────────────────────────────────────────────────
 
 def _place_logo(img: Image.Image, logo_override: str | None = None) -> Image.Image:
-    """Centre logo.png (if present) or render text logo with Cinzel."""
+    """Place logo in the **top-right corner** (8 % from top, 8 % from right)."""
     w, h = img.size
     y = int(h * LOGO_TOP)
+    margin_r = int(w * LOGO_RIGHT)
 
     # Try image logo first
     logo_path = Path(logo_override) if logo_override else Path("logo.png")
@@ -251,13 +252,13 @@ def _place_logo(img: Image.Image, logo_override: str | None = None) -> Image.Ima
             ratio = target_w / logo.width
             target_h = int(logo.height * ratio)
             logo = logo.resize((target_w, target_h), Image.LANCZOS)
-            x = (w - target_w) // 2
-            img.paste(logo, (x, y), logo)   # alpha-aware paste
+            x = w - target_w - margin_r              # right-aligned
+            img.paste(logo, (x, y), logo)
             return img
         except Exception as exc:
             logger.warning("Could not load logo image: %s", exc)
 
-    # Text fallback — elegant spaced serif
+    # Text fallback — elegant spaced serif, right-aligned
     draw = ImageDraw.Draw(img)
     size = int(w * 0.022)                          # ~24 px
     font = _load_font("cinzel", size, weight=400)
@@ -265,7 +266,7 @@ def _place_logo(img: Image.Image, logo_override: str | None = None) -> Image.Ima
     text = logo_override or LOGO_TEXT
 
     tw = _measure_spaced(draw, text, font, spacing)
-    x = (w - int(tw)) / 2
+    x = w - int(tw) - margin_r                      # right-aligned
     shadow = (1, 1, (0, 0, 0))
     _draw_spaced(draw, (x, y), text, font, (255, 255, 255), spacing, shadow)
     return img
@@ -359,7 +360,7 @@ def create_slide(
     Pipeline:
       1. Crop & resize photo to 1080 × 1350
       2. Apply bottom-up gradient overlay
-      3. Place logo (image or text) at top-centre
+      3. Place logo (image or text) at top-right corner
       4. Draw headline + subtitle in the lower safe zone
       5. Save as high-quality JPEG
 
